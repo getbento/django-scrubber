@@ -22,9 +22,9 @@ class Command(BaseCommand):
                             help='Scrub only a single model (format <app_label>.<model_name>)')
 
     def handle(self, *args, **kwargs):
-        if not settings.DEBUG:
+        if settings.ENVIRONMENT not in ['STAGING', 'DEVELOP'] :
             # avoid logger, otherwise we might silently fail if we're on live and logging is being sent somewhere else
-            self.stderr.write('this command should only be run with DEBUG=True, to avoid running on live systems')
+            self.stderr.write('this command should only be run our staging env')
             return False
 
         global_scrubbers = settings_with_fallback('SCRUBBER_GLOBAL_SCRUBBERS')

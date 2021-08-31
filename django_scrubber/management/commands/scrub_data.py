@@ -68,14 +68,14 @@ class Command(BaseCommand):
 
             options = dict(_get_options(model))
 
-            if "disconnect_signals" in options:
-                disconnect_signals = options["disconnect_signals"]
+            if 'disconnect_signals' in options:
+                disconnect_signals = options['disconnect_signals']
 
                 for signal_data in disconnect_signals:
-                    model_signal = getattr(signals, signal_data["type"])
+                    model_signal = getattr(signals, signal_data['type'])
                     model_signal.disconnect(
-                        sender=signal_data["sender"],
-                        dispatch_uid=signal_data["dispatch_uid"],
+                        sender=signal_data['sender'],
+                        dispatch_uid=signal_data['dispatch_uid'],
                     )
 
             if 'trim_table' in options:

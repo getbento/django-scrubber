@@ -2,7 +2,7 @@ import logging
 import datetime
 
 from django.conf import settings
-from django.db.models import F
+from django.db.models import F, signals
 from django.db.utils import IntegrityError, DataError
 from django.core.exceptions import FieldDoesNotExist
 from django.core.management.base import BaseCommand, CommandError
@@ -67,6 +67,16 @@ class Command(BaseCommand):
             logger.info('Scrubbing %s with %s', model._meta.label, realized_scrubbers)
 
             options = dict(_get_options(model))
+
+            if 'disconnect_signals' in options:
+                disconnect_signals = options['disconnect_signals']
+
+                for signal_data in disconnect_signals:
+                    model_signal = getattr(signals, signal_data['type'])
+                    model_signal.disconnect(
+                        sender=signal_data['sender'],
+                        dispatch_uid=signal_data['dispatch_uid'],
+                    )
 
             if 'trim_table' in options:
                 filter_kwargs = {options['trim_attribute'] + '__gte': datetime.datetime.now() - datetime.timedelta(days=30)}

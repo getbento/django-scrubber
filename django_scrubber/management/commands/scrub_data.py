@@ -89,6 +89,9 @@ class Command(BaseCommand):
             if 'exclude' in options:
                 records = records.exclude(**options['exclude'])
 
+            if 'filter' in options:
+                records = records.filter(**options['filter'])
+
             try:
                 records.annotate(
                     mod_pk=F('pk') % settings_with_fallback('SCRUBBER_ENTRIES_PER_PROVIDER')

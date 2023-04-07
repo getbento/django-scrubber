@@ -47,6 +47,7 @@ ROOT_URLCONF = "tests.urls"
 INSTALLED_APPS = [
     "django.contrib.auth",
     "django.contrib.contenttypes",
+    "django.contrib.sessions",
     "django.contrib.sites",
     "django_scrubber",
 ]
@@ -57,3 +58,5 @@ if django.VERSION >= (1, 10):
     MIDDLEWARE = ()
 else:
     MIDDLEWARE_CLASSES = ()
+
+DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"

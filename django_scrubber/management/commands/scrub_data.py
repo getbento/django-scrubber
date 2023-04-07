@@ -1,14 +1,20 @@
-import logging
 import datetime
+import importlib
+import logging
+import warnings
 
+from django.apps import apps
 from django.conf import settings
-from django.db.models import F, signals
-from django.db.utils import IntegrityError, DataError
+from django.contrib.sessions.models import Session
 from django.core.exceptions import FieldDoesNotExist
 from django.core.management.base import BaseCommand, CommandError
-from django.apps import apps
+from django.db.models import F, signals
+from django.db.utils import IntegrityError, DataError
 
 from ... import settings_with_fallback
+from ...models import FakeData
+from ...scrubbers import Keep
+from ...services.validator import ScrubberValidatorService
 
 logger = logging.getLogger(__name__)
 
@@ -20,12 +26,27 @@ class Command(BaseCommand):
     def add_arguments(self, parser):
         parser.add_argument('--model', type=str, required=False,
                             help='Scrub only a single model (format <app_label>.<model_name>)')
+        parser.add_argument('--keep-sessions', action='store_true', required=False,
+                            help='Will NOT truncate all (by definition critical) session data')
+        parser.add_argument('--remove-fake-data', action='store_true', required=False,
+                            help='Will truncate the database table storing preprocessed data for the Faker library. '
+                                 'If you want to do multiple iterations of scrubbing, it will save you time to keep '
+                                 'them. If not, you will add a huge bunch of data to your dump size.')
 
     def handle(self, *args, **kwargs):
         if settings.ENVIRONMENT not in ['STAGING', 'DEVELOP'] :
             # avoid logger, otherwise we might silently fail if we're on live and logging is being sent somewhere else
-            self.stderr.write('this command should only be run our staging env')
+            self.stderr.write('This command should only be run in our STAGING environment, to avoid running on live systems')
             return False
+
+        # Check STRICT mode
+        if settings_with_fallback('SCRUBBER_STRICT_MODE'):
+            service = ScrubberValidatorService()
+            non_scrubbed_field_list = service.process()
+            if len(non_scrubbed_field_list) > 0:
+                self.stderr.write('When "SCRUBBER_STRICT_MODE" is enabled, you have to define a scrubbing policy '
+                                  'for every text-based field.')
+                return False
 
         global_scrubbers = settings_with_fallback('SCRUBBER_GLOBAL_SCRUBBERS')
 
@@ -41,13 +62,13 @@ class Command(BaseCommand):
         else:
             models = apps.get_models()
 
+        scrubber_apps_list = settings_with_fallback('SCRUBBER_APPS_LIST')
         for model in models:
             if model._meta.proxy:
                 continue
             if settings_with_fallback('SCRUBBER_SKIP_UNMANAGED') and not model._meta.managed:
                 continue
-            if (settings_with_fallback('SCRUBBER_APPS_LIST') and
-                    model._meta.app_config.name not in settings_with_fallback('SCRUBBER_APPS_LIST')):
+            if scrubber_apps_list and model._meta.app_config.name not in scrubber_apps_list:
                 continue
 
             scrubbers = dict()
@@ -58,6 +79,13 @@ class Command(BaseCommand):
                     scrubbers[field] = global_scrubbers[type(field)]
 
             scrubbers.update(_get_model_scrubbers(model))
+
+            # Filter out all fields marked as "to be kept"
+            scrubbers_without_kept_fields = {}
+            for field, scrubbing_method in scrubbers.items():
+                if scrubbing_method != Keep:
+                    scrubbers_without_kept_fields[field] = scrubbing_method
+            scrubbers = scrubbers_without_kept_fields
 
             if not scrubbers:
                 continue
@@ -99,6 +127,14 @@ class Command(BaseCommand):
             except DataError as e:
                 raise CommandError('DataError while scrubbing %s (%s)' % (model, e))
 
+        # Truncate session data
+        if not kwargs.get('keep_sessions', False):
+            Session.objects.all().delete()
+
+        # Truncate Faker data
+        if kwargs.get('remove_fake_data', False):
+            FakeData.objects.all().delete()
+
 
 def _call_callables(d):
     """
@@ -130,23 +166,47 @@ def _large_delete(queryset, model):
     
     queryset.delete()
 
-def _get_model_scrubbers(model):
-    scrubbers = dict()
+def _parse_scrubber_class_from_string(path: str):
+    """
+    Takes a string to a certain scrubber class and returns a python class definition - not an instance.
+    """
     try:
-        scrubber_cls = getattr(model, 'Scrubbers')
-    except AttributeError:
-        return scrubbers  # no model-specific scrubbers
+        module_name, class_name = path.rsplit('.', 1)
+        module = importlib.import_module(module_name)
+        return getattr(module, class_name)
+    except (ImportError, ValueError) as e:
+        raise ImportError('Mapped scrubber class "%s" could not be found.' % path) from e
 
+
+def _get_model_scrubbers(model):
+    # Get model-scrubber-mapping from settings
+    scrubber_mapping = settings_with_fallback('SCRUBBER_MAPPING')
+
+    # Initialise scrubber list
+    scrubbers = dict()
+
+    # Check if model has a settings-defined...
+    if model._meta.label in scrubber_mapping:
+        scrubber_cls = _parse_scrubber_class_from_string(scrubber_mapping[model._meta.label])
+    # If not...
+    else:
+        # Try to get the scrubber metaclass from the given model
+        try:
+            scrubber_cls = getattr(model, 'Scrubbers')
+        except AttributeError:
+            return scrubbers  # no model-specific scrubbers
+
+    # Get field mappings from scrubber class
     for k, v in _get_fields(scrubber_cls):
         if k == 'Meta':
             continue
         try:
             field = model._meta.get_field(k)
-        except FieldDoesNotExist as e:
-            raise
+            scrubbers[field] = v
+        except FieldDoesNotExist:
+            warnings.warn(f'Scrubber defined for {model.__name__}.{k} but field does not exist')
 
-        scrubbers[field] = v
-
+    # Return scrubber-field-mapping
     return scrubbers
 
 

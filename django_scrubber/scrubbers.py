@@ -47,6 +47,10 @@ class Null(FieldFunc):
     template = 'NULL'
 
 
+class Keep(FieldFunc):
+    template = None
+
+
 class Hash(FieldFunc):
     """
     Simple md5 hashing of content.
@@ -114,7 +118,12 @@ class Faker(object):
 
     def _initialize_data(self):
         from .models import FakeData
-        faker_instance = faker.Faker(locale=to_locale(get_language()))
+
+        # get locale from config and fall back to django's default one
+        locale = settings_with_fallback('SCRUBBER_FAKER_LOCALE')
+        if not locale:
+            locale = to_locale(get_language())
+        faker_instance = faker.Faker(locale=locale)
 
         # load additional faker providers
         for provider_name in settings_with_fallback('SCRUBBER_ADDITIONAL_FAKER_PROVIDERS'):
@@ -138,8 +147,8 @@ class Faker(object):
         provider_args_str = ', '.join(str(i) for i in self.provider_args)
         provider_kwargs_str = ', '.join(str(i) for i in self.provider_kwargs)
         logger.info('Initializing fake scrub data for provider %s(%s, %s)',
-            self.provider, provider_args_str, provider_kwargs_str
-        )
+                    self.provider, provider_args_str, provider_kwargs_str,
+                    )
         # TODO: maybe be a bit smarter and only regenerate if needed?
         FakeData.objects.filter(provider=self.provider_key).delete()
         fakedata = []

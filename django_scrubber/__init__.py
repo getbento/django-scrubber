@@ -1,6 +1,7 @@
 from django.conf import settings
+from django.db import models
 
-__version__ = '0.5.4.2'
+__version__ = '1.2.0'
 
 defaults = {
     'SCRUBBER_RANDOM_SEED': 42,  # we prefer idempotent scrubbing
@@ -9,6 +10,25 @@ defaults = {
     'SCRUBBER_SKIP_UNMANAGED': True,
     'SCRUBBER_APPS_LIST': None,
     'SCRUBBER_ADDITIONAL_FAKER_PROVIDERS': [],
+    'SCRUBBER_FAKER_LOCALE': None,
+    'SCRUBBER_MAPPING': dict(),
+    'SCRUBBER_STRICT_MODE': False,
+    'SCRUBBER_REQUIRED_FIELD_TYPES': (
+        models.CharField,
+        models.TextField,
+        models.URLField,
+        models.JSONField,
+        models.GenericIPAddressField,
+        models.EmailField,
+    ),
+    'SCRUBBER_REQUIRED_FIELD_MODEL_WHITELIST': [
+        'auth.Group',
+        'auth.Permission',
+        'contenttypes.ContentType',
+        'sessions.Session',
+        'sites.Site',
+        'django_scrubber.FakeData',
+    ],
 }
 
 

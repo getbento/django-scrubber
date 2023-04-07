@@ -8,6 +8,60 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 ## [Unreleased]
 -->
 
+## [1.2.0] - 2023-04-01
+### Changed
+- Added scrubber validation - Thanks @GitRon
+- Added strict mode - Thanks @GitRon
+
+## [1.1.0] - 2022-07-11
+### Changed
+- Invalid fields on scrubbers will no longer raise exception but just trigger warnings now
+- Author list completed
+
+## [1.0.0] - 2022-07-11
+### Changed
+- Meta data for python package improved - Thanks @GitRon
+
+## [0.9.0] - 2022-06-27
+### Added
+- Add functionality to scrub third party models like the Django user model, see https://github.com/RegioHelden/django-scrubber#scrubbing-third-party-models - Thanks @GitRon
+- Add tests for Python 3.10 - Thanks @costela
+
+## [0.8.0] - 2022-05-01
+### Added
+- Add `keep-sessions` argument to scrub_data command. Will NOT truncate all (by definition critical) session data. Thanks @GitRon
+- Add `remove-fake-data` argument to scrub_data command. Will truncate the database table storing preprocessed data for the Faker library. Thanks @GitRon
+- Add Django 3.2 and 4.0 to test matrix
+### Changed
+- Remove Python 3.6 from test matrix
+- Remove Django 2.2 and 3.1 from test matrix
+
+## [0.7.0] - 2022-02-24
+### Changed
+- Remove upper boundary for Faker as they release non-breaking major upgrades way too often, please pin a working release in your own app
+
+## [0.6.2] - 2022-02-08
+### Changed
+- Support faker 12.x
+
+## [0.6.1] - 2022-01-25
+### Changed
+- Support faker 11.x
+
+## [0.6.0] - 2021-10-18
+### Added
+- Add support to override Faker locale in scrubber settings
+### Changed
+- Publish coverage only on main repository
+
+## [0.5.6] - 2021-10-08
+### Changed
+- Pin psycopg2 in CI ti 2.8.6 as 2.9+ is incompatible with Django 2.2
+
+## [0.5.5] - 2021-10-08
+### Changed
+- Support faker 9.x
+
 ## [0.5.4] - 2021-04-13
 ### Changed
 - Support faker 8.x

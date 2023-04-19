@@ -154,7 +154,7 @@ def _large_delete(queryset, model):
     counter = 0
     slice_step = 1000
     count = queryset.count()
-    iterations = int(count / slice_step)
+    iterations = int(count / slice_step) + int(count % slice_step > 0)  # add 1 if there's a remainder
 
     logger.info('Deleting model {} with {} count will take {} iterations'.format(model._meta.label, count, iterations))
 

@@ -156,6 +156,14 @@ def _large_delete(queryset, model):
     count = queryset.count()
     iterations = int(count / slice_step) + int(count % slice_step > 0)  # add 1 if there's a remainder
 
+    for i, qs in enumerate(queryset):
+        if hasattr(qs, 'orders'):
+            if i % slice_step == 0:
+                logger.info('Deleting orders from model {} (progress: {}/{})'.format(model._meta.label, i, count))
+            qs.orders.all().hard_delete()
+
+    logger.info('Deleting orders from model {} (progress: {}/{})'.format(model._meta.label, count, count))
+
     logger.info('Deleting model {} with {} count will take {} iterations'.format(model._meta.label, count, iterations))
 
     while counter < iterations:

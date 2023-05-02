@@ -170,10 +170,12 @@ def _large_delete(queryset, model):
 
     for i, qs in enumerate(queryset):
         if i % slice_step == 0:
-            logger.info('Deleting queryset (progress: {}/{})'.format(i, qs_count))
+            logger.info('Deleting queryset for model {} (progress: {}/{})'.format(model._meta.label, i, qs_count))
         qs.delete()
     queryset.delete()
-    logger.info('Deleting queryset (progress: {}/{})'.format(qs_count, qs_count))
+    logger.info('Deleting queryset for model {} (progress: {}/{})'.format(model._meta.label, qs_count, qs_count))
+
+    logger.info('Finalizing scrub for model {}'.format(model._meta.label))
 
 def _parse_scrubber_class_from_string(path: str):
     """

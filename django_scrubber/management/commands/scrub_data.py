@@ -8,7 +8,7 @@ from django.conf import settings
 from django.contrib.sessions.models import Session
 from django.core.exceptions import FieldDoesNotExist
 from django.core.management.base import BaseCommand, CommandError
-from django.db.models import F, signals
+from django.db.models import F, ProtectedError, signals
 from django.db.utils import IntegrityError, DataError
 
 from ... import settings_with_fallback
@@ -157,10 +157,13 @@ def _large_delete(queryset, model):
     slice_step = 1000
 
     def _force_delete(objs):
-        if hasattr(objs, 'hard_delete'):
-            objs.hard_delete()
-        else:
-            objs.delete()
+        try:
+            try:
+                objs.delete()
+            except ProtectedError:
+                objs.hard_delete()
+        except Exception as e:
+            logger.error('ProtectedError was raised when attempting to delete(), but hard_delete() also failed on {}\nException: {}'.format(objs, e))
 
     for i, qs in enumerate(queryset):
         if i % slice_step == 0:

@@ -8,7 +8,7 @@ from django.conf import settings
 from django.contrib.sessions.models import Session
 from django.core.exceptions import FieldDoesNotExist
 from django.core.management.base import BaseCommand, CommandError
-from django.db.models import F, signals
+from django.db.models import F, ProtectedError, signals
 from django.db.utils import IntegrityError, DataError
 
 from ... import settings_with_fallback
@@ -160,27 +160,35 @@ def _large_delete(queryset, model):
     qs_count = queryset.count()
     slice_step = 1000
 
+    def _force_delete(objs):
+        try:
+            objs.delete()
+        except ProtectedError:
+            try:
+                objs.hard_delete()
+            except Exception as e:
+                logger.warning('Attempting to delete/hard_delete {} raised the following: {}'.format(objs, e))
+
     for i, qs in enumerate(queryset):
+        if i % slice_step == 0:
+            logger.info('Deleting orders from model {} (progress: {}/{})'.format(model._meta.label, i, qs_count))
         if hasattr(qs, 'orders'):
-            if i % slice_step == 0:
-                logger.info('Deleting orders from model {} (progress: {}/{})'.format(model._meta.label, i, qs_count))
-            qs.orders.all().hard_delete()
+            _force_delete(qs.orders.all())
     logger.info('Deleting orders from model {} (progress: {}/{})'.format(model._meta.label, qs_count, qs_count))
 
     for slice_start in range(0, qs_count, slice_step):
         slice_end = slice_start + slice_step
         logger.info('Deleting model {} (progress: {}/{})'.format(model._meta.label, slice_start, qs_count))
         ids = queryset.values_list('id', flat=True)[slice_start:slice_end]
-        model.objects.filter(id__in=ids).delete()
+        _force_delete(model.objects.filter(id__in=ids))
     logger.info('Deleting model {} (progress: {}/{})'.format(model._meta.label, qs_count, qs_count))
 
     for i, qs in enumerate(queryset):
         if i % slice_step == 0:
             logger.info('Deleting queryset for model {} (progress: {}/{})'.format(model._meta.label, i, qs_count))
-        qs.delete()
+        _force_delete(qs)
     queryset.delete()
     logger.info('Deleting queryset for model {} (progress: {}/{})'.format(model._meta.label, qs_count, qs_count))
-
     logger.info('Finalizing scrub for model {}'.format(model._meta.label))
 
 def _parse_scrubber_class_from_string(path: str):

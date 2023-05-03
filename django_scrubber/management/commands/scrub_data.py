@@ -32,6 +32,8 @@ class Command(BaseCommand):
                             help='Will truncate the database table storing preprocessed data for the Faker library. '
                                  'If you want to do multiple iterations of scrubbing, it will save you time to keep '
                                  'them. If not, you will add a huge bunch of data to your dump size.')
+        parser.add_argument('--older-than', type=int, required=False, default=1095,
+                            help='Trim tables older than this number of days. Defaults to 1095 (3 years).')
 
     def handle(self, *args, **kwargs):
         if settings.ENVIRONMENT not in ['STAGING', 'DEVELOP', 'NONPROD'] :
@@ -107,7 +109,7 @@ class Command(BaseCommand):
                     )
 
             if 'trim_table' in options:
-                filter_kwargs = {options['trim_attribute'] + '__lt': datetime.datetime.now() - datetime.timedelta(days=1200)}
+                filter_kwargs = {options['trim_attribute'] + '__lt': datetime.datetime.now() - datetime.timedelta(days=kwargs.get('older_than'))}
                 delete_queryset = model.objects.filter(**filter_kwargs)
 
                 _large_delete(delete_queryset, model)

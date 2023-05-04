@@ -184,7 +184,6 @@ def _large_delete(queryset, model):
                 futures.append(executor.submit(_force_delete, queryset_item))
             concurrent.futures.wait(futures)
 
-    _force_delete(queryset)
     logger.info('Finalizing scrub for model {}'.format(model_name))
 
 def _parse_scrubber_class_from_string(path: str):

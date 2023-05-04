@@ -165,7 +165,7 @@ def _large_delete(queryset, model):
             except ProtectedError:
                 objs.hard_delete()
         except Exception as e:
-            logger.error('ProtectedError was raised when attempting to delete(), but hard_delete() also failed on {}\nException: {}'.format(objs, e))
+            logger.warning('ProtectedError: Cannot delete() or hard_delete() on {}\nException: {}'.format(objs, e))
 
     with concurrent.futures.ThreadPoolExecutor() as executor:
         for page_num in paginator.page_range:

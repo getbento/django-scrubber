@@ -154,7 +154,7 @@ def _get_options(model):
 
 def _large_delete(queryset, model):
     qs_count = queryset.count()
-    slice_step = 1000
+    slice_step = 500
 
     def _force_delete(objs):
         try:

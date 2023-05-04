@@ -10,7 +10,7 @@ from django.contrib.sessions.models import Session
 from django.core.exceptions import FieldDoesNotExist
 from django.core.management.base import BaseCommand, CommandError
 from django.core.paginator import Paginator
-from django.db.models import F, ProtectedError, signals
+from django.db.models import BooleanField, F, ProtectedError, Value, signals
 from django.db.utils import IntegrityError, DataError
 
 from ... import settings_with_fallback
@@ -160,12 +160,13 @@ def _large_delete(queryset, model):
 
     def _force_delete(objs):
         try:
+            objs.delete()
+        except ProtectedError:
             try:
+                objs.annotate(allow_hard_delete=Value(True, output_field=BooleanField()))
                 objs.delete()
-            except ProtectedError:
-                objs.hard_delete()
-        except Exception as e:
-            logger.warning('ProtectedError: Cannot delete() or hard_delete() on {}\nException: {}'.format(objs, e))
+            except Exception as e:
+                logger.warning('Attempt to delete {} raised the following: {}'.format(objs, e))
 
     with concurrent.futures.ThreadPoolExecutor() as executor:
         for page_num in paginator.page_range:

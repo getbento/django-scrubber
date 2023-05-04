@@ -172,10 +172,11 @@ def _large_delete(queryset, model):
             _force_delete(qs.orders.all())
     logger.info('Deleting orders from model {} (progress: {}/{})'.format(model._meta.label, qs_count, qs_count))
 
+    qs_values_list = queryset.values_list('id', flat=True)
     for slice_start in range(0, qs_count, slice_step):
         slice_end = slice_start + slice_step
         logger.info('Deleting model {} (progress: {}/{})'.format(model._meta.label, slice_start, qs_count))
-        ids = queryset.values_list('id', flat=True)[slice_start:slice_end]
+        ids = qs_values_list[slice_start:slice_end]
         _force_delete(model.objects.filter(id__in=ids))
     logger.info('Deleting model {} (progress: {}/{})'.format(model._meta.label, qs_count, qs_count))
 

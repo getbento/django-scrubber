@@ -9,6 +9,7 @@ from django.conf import settings
 from django.contrib.sessions.models import Session
 from django.core.exceptions import FieldDoesNotExist
 from django.core.management.base import BaseCommand, CommandError
+from django.core.paginator import Paginator
 from django.db.models import F, ProtectedError, signals
 from django.db.utils import IntegrityError, DataError
 
@@ -155,8 +156,7 @@ def _get_options(model):
 
 def _large_delete(queryset, model):
     model_name = model._meta.label
-    qs_count = queryset.count()
-    slice_step = 500
+    paginator = Paginator(queryset, 250)
 
     def _force_delete(objs):
         try:
@@ -167,31 +167,24 @@ def _large_delete(queryset, model):
         except Exception as e:
             logger.error('ProtectedError was raised when attempting to delete(), but hard_delete() also failed on {}\nException: {}'.format(objs, e))
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
-        futures = []
-        for i, qs in enumerate(queryset):
-            if hasattr(qs, 'orders'):
-                future = executor.submit(_force_delete, qs.orders.all())
-                if i % slice_step == 0:
-                    future.scrub_model = model_name
-                    future.scrub_progress = f'{i}/{qs_count}'
-                    future.add_done_callback(lambda f: logger.info('Deleting orders from model {} (progress: {})'.format(f.scrub_model, f.scrub_progress)))
-                futures.append(future)
-        concurrent.futures.wait(futures)
-        logger.info('Deleting orders from model {} (progress: {}/{})'.format(model_name, qs_count, qs_count))
+    with concurrent.futures.ThreadPoolExecutor() as executor:
+        for page_num in paginator.page_range:
+            logger.info('Deleting orders from model {} (progress: {}/{})'.format(model_name, page_num, paginator.num_pages))
+            futures = []
+            for queryset_item in paginator.page(page_num):
+                if hasattr(queryset_item, 'orders'):
+                    futures.append(executor.submit(_force_delete, queryset_item.orders.all()))
+            concurrent.futures.wait(futures)
 
-        futures = []
-        for i, qs in enumerate(queryset):
-            future = executor.submit(_force_delete, qs)
-            if i % slice_step == 0:
-                future.scrub_model = model_name
-                future.scrub_progress = f'{i}/{qs_count}'
-                future.add_done_callback(lambda f: logger.info('Deleting queryset for model {} (progress: {})'.format(f.scrub_model, f.scrub_progress)))
-            futures.append(future)
-        concurrent.futures.wait(futures)
-        _force_delete(queryset)
-        logger.info('Deleting queryset for model {} (progress: {}/{})'.format(model_name, qs_count, qs_count))
-        logger.info('Finalizing scrub for model {}'.format(model_name))
+        for page_num in paginator.page_range:
+            logger.info('Deleting queryset for model {} (progress: {}/{})'.format(model_name, page_num, paginator.num_pages))
+            futures = []
+            for queryset_item in paginator.page(page_num):
+                futures.append(executor.submit(_force_delete, queryset_item))
+            concurrent.futures.wait(futures)
+
+    _force_delete(queryset)
+    logger.info('Finalizing scrub for model {}'.format(model_name))
 
 def _parse_scrubber_class_from_string(path: str):
     """

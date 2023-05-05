@@ -163,7 +163,7 @@ def _get_options(model):
 
 def _large_delete(queryset, model):
     model_name = model._meta.label
-    paginator = Paginator(queryset, 250)
+    paginator = Paginator(queryset, 500)
 
     def _force_delete(objs):
         # please just delete the thing

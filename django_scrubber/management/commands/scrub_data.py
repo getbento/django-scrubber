@@ -9,7 +9,6 @@ from django.conf import settings
 from django.contrib.sessions.models import Session
 from django.core.exceptions import FieldDoesNotExist
 from django.core.management.base import BaseCommand, CommandError
-from django.core.paginator import Paginator
 from django.db.models import BooleanField, F, ProtectedError, Value, signals
 from django.db.utils import IntegrityError, DataError
 
@@ -163,10 +162,9 @@ def _get_options(model):
 
 def _large_delete(queryset, model):
     model_name = model._meta.label
-    page_size = 250
-    paginator = Paginator(queryset, page_size)
     qs_count = queryset.count()
     qs_values_list = queryset.values_list('id', flat=True)
+    slice_step = 250
 
     def _force_delete(objs):
         # please just delete the thing
@@ -183,33 +181,39 @@ def _large_delete(queryset, model):
                     logger.warning('Attempting to delete {} raised the following: {}'.format(objs, e))
 
     with concurrent.futures.ThreadPoolExecutor() as executor:
-        for page_num in paginator.page_range:
-            logger.info('Deleting orders from model {} (progress: {}/{})'.format(model_name, page_num, paginator.num_pages))
-            futures = []
-            for queryset_item in paginator.page(page_num):
-                if hasattr(queryset_item, 'orders'):
-                    futures.append(executor.submit(_force_delete, queryset_item.orders.all()))
-            concurrent.futures.wait(futures)
+        futures = []
+        for i, qs in enumerate(queryset):
+            if hasattr(qs, 'orders'):
+                future = executor.submit(_force_delete, qs.orders.all())
+                if i % slice_step == 0:
+                    progress = 'Deleting orders from model {} (progress: {}/{})'.format(model_name, i, qs_count)
+                    future.add_done_callback(lambda f: logger.info(progress))
+                futures.append(future)
+        concurrent.futures.wait(futures)
+        logger.info('Deleting orders from model {} (progress: {}/{})'.format(model_name, qs_count, qs_count))
 
         futures = []
-        for slice_start in range(0, qs_count, page_size):
-            slice_end = slice_start + page_size
+        for slice_start in range(0, qs_count, slice_step):
+            slice_end = slice_start + slice_step
             ids = qs_values_list[slice_start:slice_end]
             future = executor.submit(_force_delete, model.objects.filter(id__in=ids))
-            future.scrub_model = model_name
-            future.scrub_progress = f'{slice_start}/{qs_count}'
-            future.add_done_callback(lambda f: logger.info('Deleting model {} (progress: {})'.format(f.scrub_model, f.scrub_progress)))
+            progress = 'Deleting model {} (progress: {}/{})'.format(model_name, i, qs_count)
+            future.add_done_callback(lambda f: logger.info(progress))
             futures.append(future)
         concurrent.futures.wait(futures)
         logger.info('Deleting model {} (progress: {}/{})'.format(model_name, qs_count, qs_count))
 
-        for page_num in paginator.page_range:
-            logger.info('Deleting queryset for model {} (progress: {}/{})'.format(model_name, page_num, paginator.num_pages))
-            futures = []
-            for queryset_item in paginator.page(page_num):
-                futures.append(executor.submit(_force_delete, queryset_item))
-            concurrent.futures.wait(futures)
+        futures = []
+        for i, qs in enumerate(queryset):
+            future = executor.submit(_force_delete, qs)
+            if i % slice_step == 0:
+                progress = 'Deleting queryset for model {} (progress: {}/{})'.format(model_name, i, qs_count)
+                future.add_done_callback(lambda f: logger.info(progress))
+            futures.append(future)
+        concurrent.futures.wait(futures)
+        logger.info('Deleting queryset for model {} (progress: {}/{})'.format(model_name, qs_count, qs_count))
 
+    _force_delete(queryset)
     logger.info('Finishing scrub for model {}'.format(model_name))
 
 def _parse_scrubber_class_from_string(path: str):

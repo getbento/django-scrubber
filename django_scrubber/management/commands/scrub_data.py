@@ -1,4 +1,3 @@
-import concurrent.futures
 import datetime
 import importlib
 import logging
@@ -164,7 +163,7 @@ def _large_delete(queryset, model):
     model_name = model._meta.label
     qs_count = queryset.count()
     qs_values_list = queryset.values_list('id', flat=True)
-    slice_step = 250
+    slice_step = 500
 
     def _force_delete(objs):
         # please just delete the thing
@@ -180,40 +179,26 @@ def _large_delete(queryset, model):
                 except Exception as e:
                     logger.warning('Attempting to delete {} raised the following: {}'.format(objs, e))
 
-    with concurrent.futures.ThreadPoolExecutor() as executor:
-        futures = []
-        for i, qs in enumerate(queryset):
-            if hasattr(qs, 'orders'):
-                future = executor.submit(_force_delete, qs.orders.all())
-                if i % slice_step == 0:
-                    future.scrub_progress = [model_name, i, qs_count]
-                    future.add_done_callback(lambda f: logger.info('Deleting orders from model {} (progress: {}/{})'.format(*f.scrub_progress)))
-                futures.append(future)
-        concurrent.futures.wait(futures)
-        logger.info('Deleting orders from model {} (progress: {}/{})'.format(model_name, qs_count, qs_count))
+    for i, qs in enumerate(queryset):
+        if i % slice_step == 0:
+            logger.info('Deleting orders from model {} (progress: {}/{})'.format(model_name, i, qs_count))
+        if hasattr(qs, 'orders'):
+            _force_delete(qs.orders.all())
+    logger.info('Deleting orders from model {} (progress: {}/{})'.format(model_name, qs_count, qs_count))
 
-        futures = []
-        for slice_start in range(0, qs_count, slice_step):
-            slice_end = slice_start + slice_step
-            ids = qs_values_list[slice_start:slice_end]
-            future = executor.submit(_force_delete, model.objects.filter(id__in=ids))
-            future.scrub_progress = [model_name, i, qs_count]
-            future.add_done_callback(lambda f: logger.info('Deleting model {} (progress: {}/{})'.format(*f.scrub_progress)))
-            futures.append(future)
-        concurrent.futures.wait(futures)
-        logger.info('Deleting model {} (progress: {}/{})'.format(model_name, qs_count, qs_count))
+    for slice_start in range(0, qs_count, slice_step):
+        logger.info('Deleting model {} (progress: {}/{})'.format(model_name, slice_start, qs_count))
+        slice_end = slice_start + slice_step
+        ids = qs_values_list[slice_start:slice_end]
+        _force_delete(model.objects.filter(id__in=ids))
+    logger.info('Deleting model {} (progress: {}/{})'.format(model_name, qs_count, qs_count))
 
-        futures = []
-        for i, qs in enumerate(queryset):
-            future = executor.submit(_force_delete, qs)
-            if i % slice_step == 0:
-                future.scrub_progress = [model_name, i, qs_count]
-                future.add_done_callback(lambda f: logger.info('Deleting queryset for model {} (progress: {}/{})'.format(f.scrub_progress)))
-            futures.append(future)
-        concurrent.futures.wait(futures)
-        logger.info('Deleting queryset for model {} (progress: {}/{})'.format(model_name, qs_count, qs_count))
-
+    for i, qs in enumerate(queryset):
+        if i % slice_step == 0:
+            logger.info('Deleting queryset for model {} (progress: {}/{})'.format(model_name, i, qs_count))
+        _force_delete(qs)
     _force_delete(queryset)
+    logger.info('Deleting queryset for model {} (progress: {}/{})'.format(model_name, qs_count, qs_count))
     logger.info('Finishing scrub for model {}'.format(model_name))
 
 def _parse_scrubber_class_from_string(path: str):

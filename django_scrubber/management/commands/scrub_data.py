@@ -163,7 +163,10 @@ def _get_options(model):
 
 def _large_delete(queryset, model):
     model_name = model._meta.label
-    paginator = Paginator(queryset, 250)
+    page_size = 250
+    paginator = Paginator(queryset, page_size)
+    qs_count = queryset.count()
+    qs_values_list = queryset.values_list('id', flat=True)
 
     def _force_delete(objs):
         # please just delete the thing
@@ -187,6 +190,18 @@ def _large_delete(queryset, model):
                 if hasattr(queryset_item, 'orders'):
                     futures.append(executor.submit(_force_delete, queryset_item.orders.all()))
             concurrent.futures.wait(futures)
+
+        futures = []
+        for slice_start in range(0, qs_count, page_size):
+            slice_end = slice_start + page_size
+            ids = qs_values_list[slice_start:slice_end]
+            future = executor.submit(_force_delete, model.objects.filter(id__in=ids))
+            future.scrub_model = model_name
+            future.scrub_progress = f'{slice_start}/{qs_count}'
+            future.add_done_callback(lambda f: logger.info('Deleting model {} (progress: {})'.format(f.scrub_model, f.scrub_progress)))
+            futures.append(future)
+        concurrent.futures.wait(futures)
+        logger.info('Deleting model {} (progress: {}/{})'.format(model_name, qs_count, qs_count))
 
         for page_num in paginator.page_range:
             logger.info('Deleting queryset for model {} (progress: {}/{})'.format(model_name, page_num, paginator.num_pages))

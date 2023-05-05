@@ -46,4 +46,4 @@ class Command(BaseCommand):
                 logger.info(f'Scrubbing model {model}')
                 future = executor.submit(scrub_data, model, older_than)
                 future.scrub_model = model
-                future.add_done_callback(lambda f: logger.info(f'Completed scrubbing of model {f.scrub_model}'))
+                future.add_done_callback(lambda f: logger.info(f'Finished scrubbing for model {f.scrub_model}'))

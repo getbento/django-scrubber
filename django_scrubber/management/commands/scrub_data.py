@@ -119,9 +119,11 @@ class Command(BaseCommand):
             records = model.objects.all()
 
             if 'exclude' in options:
+                logger.info('Applying exclude options')
                 records = records.exclude(**options['exclude'])
 
             try:
+                logger.info('Applying scrubber annotations')
                 records.annotate(
                     mod_pk=F('pk') % settings_with_fallback('SCRUBBER_ENTRIES_PER_PROVIDER')
                 ).update(**realized_scrubbers)
@@ -133,10 +135,12 @@ class Command(BaseCommand):
 
         # Truncate session data
         if not kwargs.get('keep_sessions', False):
+            logger.info('Truncating session data')
             Session.objects.all().delete()
 
         # Truncate Faker data
         if kwargs.get('remove_fake_data', False):
+            logger.info('Truncating faker data')
             FakeData.objects.all().delete()
 
 
@@ -184,7 +188,7 @@ def _large_delete(queryset, model):
                 futures.append(executor.submit(_force_delete, queryset_item))
             concurrent.futures.wait(futures)
 
-    logger.info('Finalizing scrub for model {}'.format(model_name))
+    logger.info('Finishing scrub for model {}'.format(model_name))
 
 def _parse_scrubber_class_from_string(path: str):
     """

@@ -178,12 +178,18 @@ def _large_delete(queryset, model):
                     objs.delete()
                 except Exception as e:
                     logger.warning('Attempting to delete {} raised the following: {}'.format(objs, e))
+            except Exception as e:
+                logger.warning('Attempting to delete {} raised the following: {}'.format(objs, e))
+        except Exception as e:
+            logger.warning('Attempting to delete {} raised the following: {}'.format(objs, e))
 
     for i, qs in enumerate(queryset):
         if i % slice_step == 0:
             logger.info('Deleting orders from model {} (progress: {}/{})'.format(model_name, i, qs_count))
-        if hasattr(qs, 'orders'):
+        try:
             _force_delete(qs.orders.all())
+        except AttributeError:
+            pass  # no orders attribute
     logger.info('Deleting orders from model {} (progress: {}/{})'.format(model_name, qs_count, qs_count))
 
     for slice_start in range(0, qs_count, slice_step):

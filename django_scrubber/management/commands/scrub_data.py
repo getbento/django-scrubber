@@ -166,14 +166,18 @@ def _large_delete(queryset, model):
     paginator = Paginator(queryset, 250)
 
     def _force_delete(objs):
+        # please just delete the thing
         try:
             objs.delete()
         except ProtectedError:
             try:
-                objs.annotate(allow_hard_delete=Value(True, output_field=BooleanField()))
-                objs.delete()
-            except Exception as e:
-                logger.warning('Attempt to delete {} raised the following: {}'.format(objs, e))
+                objs.hard_delete()
+            except AttributeError:  # hard_delete does not exist
+                try:
+                    objs.annotate(allow_hard_delete=Value(True, output_field=BooleanField()))
+                    objs.delete()
+                except Exception as e:
+                    logger.warning('Attempting to delete {} raised the following: {}'.format(objs, e))
 
     with concurrent.futures.ThreadPoolExecutor() as executor:
         for page_num in paginator.page_range:

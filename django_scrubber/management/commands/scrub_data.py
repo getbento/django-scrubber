@@ -183,7 +183,7 @@ def _large_delete(queryset, model):
         except Exception as e:
             logger.warning('Attempting to delete {} raised the following: {}'.format(objs, e))
 
-    for i, qs in enumerate(queryset):
+    for i, qs in enumerate(queryset.iterator()):
         if i % slice_step == 0:
             logger.info('Deleting orders from model {} (progress: {}/{})'.format(model_name, i, qs_count))
         try:
@@ -199,7 +199,7 @@ def _large_delete(queryset, model):
         _force_delete(model.objects.filter(id__in=ids))
     logger.info('Deleting model {} (progress: {}/{})'.format(model_name, qs_count, qs_count))
 
-    for i, qs in enumerate(queryset):
+    for i, qs in enumerate(queryset.iterator()):
         if i % slice_step == 0:
             logger.info('Deleting queryset for model {} (progress: {}/{})'.format(model_name, i, qs_count))
         _force_delete(qs)

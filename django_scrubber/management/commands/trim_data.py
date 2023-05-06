@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 
 
 def scrub_data(model, older_than):
-    scrub_data = shlex.split(f'python manage.py scrub_data --model {model} --older-than {older_than} --remove-fake-data --trim-only')
+    scrub_data = shlex.split(f'python manage.py scrub_data --model {model} --older-than {older_than} --remove-fake-data')
     result = subprocess.run(scrub_data)
     return result.returncode
 

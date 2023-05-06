@@ -39,7 +39,7 @@ class Command(BaseCommand):
 
         logger.info(f'{len(models)} model(s) to be trimmed. Trimming those older than {older_than} days.')
 
-        with concurrent.futures.ProcessPoolExecutor() as executor:
+        with concurrent.futures.ProcessPoolExecutor(max_workers=10) as executor:
             for model in models:
                 logger.info(f'Trimming model {model}')
                 future = executor.submit(scrub_data, model, older_than)

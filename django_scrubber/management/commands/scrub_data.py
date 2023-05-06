@@ -8,7 +8,7 @@ from django.conf import settings
 from django.contrib.sessions.models import Session
 from django.core.exceptions import FieldDoesNotExist
 from django.core.management.base import BaseCommand, CommandError
-from django.db.models import BooleanField, F, ProtectedError, Value, signals
+from django.db.models import F, signals
 from django.db.utils import IntegrityError, DataError
 
 from ... import settings_with_fallback
@@ -165,45 +165,31 @@ def _large_delete(queryset, model):
     qs_values_list = queryset.values_list('id', flat=True)
     slice_step = 500
 
-    def _force_delete(objs):
-        # please just delete the thing
-        try:
-            objs.delete()
-        except ProtectedError:
-            try:
-                objs.hard_delete()
-            except AttributeError:  # hard_delete does not exist
-                try:
-                    objs.annotate(allow_hard_delete=Value(True, output_field=BooleanField()))
-                    objs.delete()
-                except Exception as e:
-                    logger.warning('Attempting to delete {} raised the following: {}'.format(objs, e))
-            except Exception as e:
-                logger.warning('Attempting to delete {} raised the following: {}'.format(objs, e))
-        except Exception as e:
-            logger.warning('Attempting to delete {} raised the following: {}'.format(objs, e))
-
-    for i, qs in enumerate(queryset.iterator()):
+    for i, qs in enumerate(queryset):
         if i % slice_step == 0:
             logger.info('Deleting orders from model {} (progress: {}/{})'.format(model_name, i, qs_count))
-        try:
-            _force_delete(qs.orders.all())
-        except AttributeError:
-            pass  # no orders attribute
+        if hasattr(qs, 'orders'):
+            try:
+                qs.orders.all().hard_delete()  # orders usually require hard_delete()
+            except Exception:
+                try:
+                    qs.orders.all().delete()
+                except Exception as e:
+                    logger.warning('Attempting to delete {} raised the following: {}'.format(qs, e))
     logger.info('Deleting orders from model {} (progress: {}/{})'.format(model_name, qs_count, qs_count))
 
     for slice_start in range(0, qs_count, slice_step):
         logger.info('Deleting model {} (progress: {}/{})'.format(model_name, slice_start, qs_count))
         slice_end = slice_start + slice_step
         ids = qs_values_list[slice_start:slice_end]
-        _force_delete(model.objects.filter(id__in=ids))
+        model.objects.filter(id__in=ids).delete()
     logger.info('Deleting model {} (progress: {}/{})'.format(model_name, qs_count, qs_count))
 
-    for i, qs in enumerate(queryset.iterator()):
+    for i, qs in enumerate(queryset):
         if i % slice_step == 0:
             logger.info('Deleting queryset for model {} (progress: {}/{})'.format(model_name, i, qs_count))
-        _force_delete(qs)
-    _force_delete(queryset)
+        qs.delete()
+    queryset.delete()
     logger.info('Deleting queryset for model {} (progress: {}/{})'.format(model_name, qs_count, qs_count))
     logger.info('Finishing scrub for model {}'.format(model_name))
 

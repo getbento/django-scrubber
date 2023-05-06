@@ -117,9 +117,11 @@ class Command(BaseCommand):
             records = model.objects.all()
 
             if 'exclude' in options:
+                logger.info('Applying exclude options')
                 records = records.exclude(**options['exclude'])
 
             try:
+                logger.info('Applying scrubber annotations')
                 records.annotate(
                     mod_pk=F('pk') % settings_with_fallback('SCRUBBER_ENTRIES_PER_PROVIDER')
                 ).update(**realized_scrubbers)
@@ -128,6 +130,8 @@ class Command(BaseCommand):
                                    'SCRUBBER_ENTRIES_PER_PROVIDER?' % (model, e))
             except DataError as e:
                 raise CommandError('DataError while scrubbing %s (%s)' % (model, e))
+
+            logger.info('Finished scrub for model {}'.format(model._meta.label))
 
         # Truncate session data
         if not kwargs.get('keep_sessions', False):
@@ -168,7 +172,7 @@ def _large_delete(queryset, model):
                 try:
                     qs.orders.all().delete()
                 except Exception as e:
-                    logger.warning('Attempting to delete {} raised the following: {}'.format(qs, e))
+                    logger.warning('Attempts to delete {} raised the following: {}'.format(qs, e))
     logger.info('Deleting orders from model {} (progress: {}/{})'.format(model_name, qs_count, qs_count))
 
     for slice_start in range(0, qs_count, slice_step):
@@ -184,7 +188,6 @@ def _large_delete(queryset, model):
         qs.delete()
     queryset.delete()
     logger.info('Deleting queryset for model {} (progress: {}/{})'.format(model_name, qs_count, qs_count))
-    logger.info('Finishing scrub for model {}'.format(model_name))
 
 def _parse_scrubber_class_from_string(path: str):
     """

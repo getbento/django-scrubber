@@ -174,8 +174,10 @@ def _large_delete(queryset, model):
     for i, qs in enumerate(queryset):
         if i % slice_step == 0:
             logger.info('Deleting orders from model {} (progress: {}/{})'.format(model_name, i, qs_count))
-        if hasattr(qs, 'orders'):
+        try:
             _force_delete(qs.orders.all())
+        except AttributeError:
+            pass  # no orders attribute
     logger.info('Deleting orders from model {} (progress: {}/{})'.format(model_name, qs_count, qs_count))
 
     for slice_start in range(0, qs_count, slice_step):
@@ -189,7 +191,7 @@ def _large_delete(queryset, model):
         if i % slice_step == 0:
             logger.info('Deleting queryset for model {} (progress: {}/{})'.format(model_name, i, qs_count))
         _force_delete(qs)
-    queryset.delete()
+    _force_delete(queryset)
     logger.info('Deleting queryset for model {} (progress: {}/{})'.format(model_name, qs_count, qs_count))
     logger.info('Finishing scrub for model {}'.format(model_name))
 

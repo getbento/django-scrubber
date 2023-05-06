@@ -34,6 +34,8 @@ class Command(BaseCommand):
                                  'them. If not, you will add a huge bunch of data to your dump size.')
         parser.add_argument('--older-than', type=int, required=False, default=1095,
                             help='Trim tables older than this number of days. Defaults to 1095 (3 years).')
+        parser.add_argument('--trim-only', action='store_true', required=False,
+                            help='Trim only. No scrub. Consider doing this before scrubbing.')
 
     def handle(self, *args, **kwargs):
         if settings.ENVIRONMENT not in ['STAGING', 'DEVELOP', 'NONPROD'] :
@@ -114,14 +116,15 @@ class Command(BaseCommand):
 
                 _large_delete(delete_queryset, model)
 
+            if kwargs.get('trim_only'):
+                continue  # skip the remaining steps and move on
+
             records = model.objects.all()
 
             if 'exclude' in options:
-                logger.info('Applying exclude options')
                 records = records.exclude(**options['exclude'])
 
             try:
-                logger.info('Applying scrubber annotations')
                 records.annotate(
                     mod_pk=F('pk') % settings_with_fallback('SCRUBBER_ENTRIES_PER_PROVIDER')
                 ).update(**realized_scrubbers)
@@ -130,8 +133,6 @@ class Command(BaseCommand):
                                    'SCRUBBER_ENTRIES_PER_PROVIDER?' % (model, e))
             except DataError as e:
                 raise CommandError('DataError while scrubbing %s (%s)' % (model, e))
-
-            logger.info('Finished scrub for model {}'.format(model._meta.label))
 
         # Truncate session data
         if not kwargs.get('keep_sessions', False):

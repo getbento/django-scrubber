@@ -34,8 +34,6 @@ class Command(BaseCommand):
                                  'them. If not, you will add a huge bunch of data to your dump size.')
         parser.add_argument('--older-than', type=int, required=False, default=1095,
                             help='Trim tables older than this number of days. Defaults to 1095 (3 years).')
-        parser.add_argument('--trim-only', action='store_true', required=False,
-                            help='Trim only. No scrub. Consider doing this before scrubbing.')
 
     def handle(self, *args, **kwargs):
         if settings.ENVIRONMENT not in ['STAGING', 'DEVELOP', 'NONPROD'] :
@@ -116,21 +114,20 @@ class Command(BaseCommand):
 
                 _large_delete(delete_queryset, model)
 
-            if not kwargs.get('trim_only'):
-                records = model.objects.all()
+            records = model.objects.all()
 
-                if 'exclude' in options:
-                    records = records.exclude(**options['exclude'])
+            if 'exclude' in options:
+                records = records.exclude(**options['exclude'])
 
-                try:
-                    records.annotate(
-                        mod_pk=F('pk') % settings_with_fallback('SCRUBBER_ENTRIES_PER_PROVIDER')
-                    ).update(**realized_scrubbers)
-                except IntegrityError as e:
-                    raise CommandError('Integrity error while scrubbing %s (%s); maybe increase '
-                                    'SCRUBBER_ENTRIES_PER_PROVIDER?' % (model, e))
-                except DataError as e:
-                    raise CommandError('DataError while scrubbing %s (%s)' % (model, e))
+            try:
+                records.annotate(
+                    mod_pk=F('pk') % settings_with_fallback('SCRUBBER_ENTRIES_PER_PROVIDER')
+                ).update(**realized_scrubbers)
+            except IntegrityError as e:
+                raise CommandError('Integrity error while scrubbing %s (%s); maybe increase '
+                                   'SCRUBBER_ENTRIES_PER_PROVIDER?' % (model, e))
+            except DataError as e:
+                raise CommandError('DataError while scrubbing %s (%s)' % (model, e))
 
         # Truncate session data
         if not kwargs.get('keep_sessions', False):

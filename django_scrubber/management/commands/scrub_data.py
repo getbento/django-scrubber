@@ -125,6 +125,7 @@ class Command(BaseCommand):
                 records = records.exclude(**options['exclude'])
 
             try:
+                logger.info('Scrubbing {}'.format(model._meta.label))
                 records.annotate(
                     mod_pk=F('pk') % settings_with_fallback('SCRUBBER_ENTRIES_PER_PROVIDER')
                 ).update(**realized_scrubbers)

@@ -34,8 +34,6 @@ class Command(BaseCommand):
                                  'them. If not, you will add a huge bunch of data to your dump size.')
         parser.add_argument('--older-than', type=int, required=False, default=1095,
                             help='Trim tables older than this number of days. Defaults to 1095 (3 years).')
-        parser.add_argument('--trim-only', action='store_true', required=False,
-                            help='Trim only. No scrub. Consider doing this before scrubbing.')
 
     def handle(self, *args, **kwargs):
         if settings.ENVIRONMENT not in ['STAGING', 'DEVELOP', 'NONPROD'] :
@@ -116,9 +114,6 @@ class Command(BaseCommand):
 
                 _large_delete(delete_queryset, model)
 
-            if kwargs.get('trim_only'):
-                continue  # skip the remaining steps and move on
-
             records = model.objects.all()
 
             if 'exclude' in options:
@@ -134,6 +129,8 @@ class Command(BaseCommand):
                                    'SCRUBBER_ENTRIES_PER_PROVIDER?' % (model, e))
             except DataError as e:
                 raise CommandError('DataError while scrubbing %s (%s)' % (model, e))
+
+            logger.info('Finished scrubbing model {}'.format(model._meta.label))
 
         # Truncate session data
         if not kwargs.get('keep_sessions', False):
@@ -168,11 +165,12 @@ def _large_delete(queryset, model):
         if i % slice_step == 0:
             logger.info('Deleting orders from model {} (progress: {}/{})'.format(model_name, i, qs_count))
         if hasattr(qs, 'orders'):
+            orders = qs.orders.all()
             try:
-                qs.orders.all().hard_delete()  # orders usually require hard_delete()
+                orders.hard_delete()  # orders usually require hard_delete()
             except Exception:
                 try:
-                    qs.orders.all().delete()
+                    orders.delete()
                 except Exception as e:
                     logger.warning('Trying to delete {} raised the following: {}'.format(qs, e))
     logger.info('Deleting orders from model {} (progress: {}/{})'.format(model_name, qs_count, qs_count))

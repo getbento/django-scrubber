@@ -158,21 +158,33 @@ def _large_delete(queryset, model):
         if hasattr(qs, 'orders'):
             if i % slice_step == 0:
                 logger.info('Deleting orders from model {} (progress: {}/{})'.format(model._meta.label, i, qs_count))
-            qs.orders.all().hard_delete()
+            try:
+                qs.orders.all().hard_delete()
+            except Exception as e:
+                logger.warning(e)
     logger.info('Deleting orders from model {} (progress: {}/{})'.format(model._meta.label, qs_count, qs_count))
 
     for slice_start in range(0, qs_count, slice_step):
         slice_end = slice_start + slice_step
         logger.info('Deleting model {} (progress: {}/{})'.format(model._meta.label, slice_start, qs_count))
         ids = queryset.values_list('id', flat=True)[slice_start:slice_end]
-        model.objects.filter(id__in=ids).delete()
+        try:
+            model.objects.filter(id__in=ids).delete()
+        except Exception as e:
+            logger.warning(e)
     logger.info('Deleting model {} (progress: {}/{})'.format(model._meta.label, qs_count, qs_count))
 
     for i, qs in enumerate(queryset):
         if i % slice_step == 0:
             logger.info('Deleting queryset (progress: {}/{})'.format(i, qs_count))
-        qs.delete()
-    queryset.delete()
+        try:
+            qs.delete()
+        except Exception as e:
+            logger.warning(e)
+    try:
+        queryset.delete()
+    except Exception as e:
+        logger.warning(e)
     logger.info('Deleting queryset (progress: {}/{})'.format(qs_count, qs_count))
 
 def _parse_scrubber_class_from_string(path: str):

@@ -106,11 +106,10 @@ class Command(BaseCommand):
                         dispatch_uid=signal_data['dispatch_uid'],
                     )
 
-            if 'trim_table' in options:
-                filter_kwargs = {options['trim_attribute'] + '__gte': datetime.datetime.now() - datetime.timedelta(days=30)}
-                delete_queryset = model.objects.filter(**filter_kwargs)
-
-                _large_delete(delete_queryset, model)
+            # if 'trim_table' in options:
+            #     filter_kwargs = {options['trim_attribute'] + '__gte': datetime.datetime.now() - datetime.timedelta(days=30)}
+            #     delete_queryset = model.objects.filter(**filter_kwargs)
+            #     _large_delete(delete_queryset, model)
 
             records = model.objects.all()
 
